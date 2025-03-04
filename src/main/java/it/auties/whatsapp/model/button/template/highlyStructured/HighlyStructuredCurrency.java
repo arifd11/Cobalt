@@ -1,13 +1,13 @@
 package it.auties.whatsapp.model.button.template.highlyStructured;
 
-import it.auties.protobuf.annotation.ProtobufMessageName;
+import it.auties.protobuf.annotation.ProtobufMessage;
 import it.auties.protobuf.annotation.ProtobufProperty;
 import it.auties.protobuf.model.ProtobufType;
 
 /**
  * A model class that represents a currency
  */
-@ProtobufMessageName("Message.HighlyStructuredMessage.HSMLocalizableParameter.HSMCurrency")
+@ProtobufMessage(name = "Message.HighlyStructuredMessage.HSMLocalizableParameter.HSMCurrency")
 public record HighlyStructuredCurrency(
         @ProtobufProperty(index = 1, type = ProtobufType.STRING)
         String currencyCode,
@@ -15,7 +15,7 @@ public record HighlyStructuredCurrency(
         long amount1000
 ) implements HighlyStructuredLocalizableParameterValue {
     @Override
-    public HighlyStructuredLocalizableParameterValue.Type parameterType() {
-        return HighlyStructuredLocalizableParameterValue.Type.CURRENCY;
+    public Type parameterType() {
+        return Type.CURRENCY;
     }
 }

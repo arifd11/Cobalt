@@ -25,7 +25,7 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
      * @return a new instance of Attributes
      */
     @SafeVarargs
-    public static Attributes of(Entry<String, Object>... entries) {
+    public static Attributes of(Entry<String, ?>... entries) {
         return ofNullable(ofEntries(entries));
     }
 
@@ -37,7 +37,7 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
      */
     @SafeVarargs
     @JsonCreator
-    public static Attributes ofNullable(Entry<String, Object>... entries) {
+    public static Attributes ofNullable(Entry<String, ?>... entries) {
         return entries == null ? of() : ofNullable(ofEntries(entries));
     }
 
@@ -65,7 +65,7 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
     }
 
     /**
-     * Checks whether a non-null key whatsappOldEligible in this map
+     * Checks whether a non-null key has a value in this map
      *
      * @param key the non-null key
      * @return a boolean
@@ -75,7 +75,7 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
     }
 
     /**
-     * Checks whether a non-null key whatsappOldEligible in this map and has the provided value
+     * Checks whether a non-null key value in this map and has the provided value
      *
      * @param key   the non-null key
      * @param value the nullable value to check against
@@ -123,7 +123,7 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
      * @return the calling instance
      */
     public Attributes put(String key, Object value, boolean condition) {
-        if (condition) {
+        if (value != null && condition) {
             toMap.put(key, value);
         }
         return this;
@@ -137,7 +137,9 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
      * @return the calling instance
      */
     public Attributes put(String key, Object value) {
-        toMap.put(key, value);
+        if(value != null) {
+            toMap.put(key, value);
+        }
         return this;
     }
 
@@ -401,7 +403,7 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
     }
 
     public Attributes putAll(Collection<? extends Entry<String, ?>> entries) {
-        for(var entry : entries) {
+        for (var entry : entries) {
             toMap.put(entry.getKey(), entry.getValue());
         }
 
@@ -410,7 +412,7 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
 
     @SafeVarargs
     public final Attributes putAll(Entry<String, ?>... entries) {
-        for(var entry : entries) {
+        for (var entry : entries) {
             toMap.put(entry.getKey(), entry.getValue());
         }
 

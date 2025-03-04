@@ -23,17 +23,20 @@ public sealed class MobileRegistrationBuilder {
     final Keys keys;
     final ErrorHandler errorHandler;
     RegisteredResult result;
+    boolean printRequests;
     AsyncVerificationCodeSupplier verificationCodeSupplier;
 
     MobileRegistrationBuilder(Store store, Keys keys, ErrorHandler errorHandler) {
         this.store = store;
         this.keys = keys;
         this.errorHandler = errorHandler;
+        this.printRequests = false;
     }
 
     public final static class Unregistered extends MobileRegistrationBuilder {
         private UnverifiedResult unregisteredResult;
         private VerificationCodeMethod verificationCodeMethod;
+        private boolean autocloseCloudVerificationClient;
 
         Unregistered(Store store, Keys keys, ErrorHandler errorHandler) {
             super(store, keys, errorHandler);
@@ -65,6 +68,11 @@ public sealed class MobileRegistrationBuilder {
             return this;
         }
 
+        public Unregistered printRequests(boolean printRequests) {
+            this.printRequests = printRequests;
+            return this;
+        }
+
         /**
          * Registers a phone number by asking for a verification code and then sending it to Whatsapp
          *
@@ -88,14 +96,15 @@ public sealed class MobileRegistrationBuilder {
                         verificationCodeSupplier,
                         verificationCodeMethod
                 );
-                return registration.registerPhoneNumber().thenApply(response -> {
-                    var api = Whatsapp.customBuilder()
-                            .store(store)
-                            .keys(keys)
-                            .errorHandler(errorHandler)
-                            .build();
-                    return this.result = new RegisteredResult(api, Optional.ofNullable(response));
-                });
+                return registration.registerPhoneNumber()
+                        .thenApplyAsync(response -> {
+                            var api = Whatsapp.customBuilder()
+                                    .store(store)
+                                    .keys(keys)
+                                    .errorHandler(errorHandler)
+                                    .build();
+                            return this.result = new RegisteredResult(api, Optional.ofNullable(response));
+                        });
             }
 
             var api = Whatsapp.customBuilder()
@@ -105,7 +114,6 @@ public sealed class MobileRegistrationBuilder {
                     .build();
             return CompletableFuture.completedFuture(result);
         }
-
 
         /**
          * Asks Whatsapp for a one-time-password to start the registration process
@@ -162,6 +170,11 @@ public sealed class MobileRegistrationBuilder {
 
         public Unverified proxy(URI proxy) {
             store.setProxy(proxy);
+            return this;
+        }
+
+        public Unverified printRequests(boolean printRequests) {
+            this.printRequests = printRequests;
             return this;
         }
 

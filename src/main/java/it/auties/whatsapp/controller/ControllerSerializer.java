@@ -1,6 +1,9 @@
 package it.auties.whatsapp.controller;
 
 import it.auties.whatsapp.api.ClientType;
+import it.auties.whatsapp.controller.builtin.DiscardingControllerSerializer;
+import it.auties.whatsapp.controller.builtin.JsonControllerSerializer;
+import it.auties.whatsapp.controller.builtin.ProtobufControllerSerializer;
 import it.auties.whatsapp.model.mobile.PhoneNumber;
 
 import java.nio.file.Path;
@@ -22,7 +25,7 @@ public interface ControllerSerializer {
      * @return a serializer
      */
     static ControllerSerializer discarding() {
-        return DiscardingControllerSerializer.singleton();
+        return DiscardingControllerSerializer.instance();
     }
 
     /**
@@ -32,7 +35,7 @@ public interface ControllerSerializer {
      * @return a serializer
      */
     static ControllerSerializer toProtobuf() {
-        return ProtobufControllerSerializer.ofDefaultPath();
+        return new ProtobufControllerSerializer();
     }
 
     /**
@@ -43,7 +46,28 @@ public interface ControllerSerializer {
      * @return a serializer
      */
     static ControllerSerializer toProtobuf(Path baseDirectory) {
-        return ProtobufControllerSerializer.of(baseDirectory);
+        return new ProtobufControllerSerializer(baseDirectory);
+    }
+
+    /**
+     * Returns a json serializer
+     * This implementation uses .json files with no compression
+     *
+     * @return a serializer
+     */
+    static ControllerSerializer toJson() {
+        return new JsonControllerSerializer();
+    }
+
+    /**
+     * Returns the default serializer
+     * This implementation uses .json files with no compression
+     *
+     * @param baseDirectory the directory where all the sessions should be saved
+     * @return a serializer
+     */
+    static ControllerSerializer toJson(Path baseDirectory) {
+        return new JsonControllerSerializer(baseDirectory);
     }
 
     /**

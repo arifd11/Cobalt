@@ -9,9 +9,9 @@ open module it.auties.cobalt {
     requires com.google.zxing;
     requires com.google.zxing.javase;
     requires it.auties.qr;
-    requires java.desktop;
+    requires static java.desktop;
 
-    // Serialization (Protobuf, JSON, Smile)
+    // Serialization (Protobuf, JSON)
     requires it.auties.protobuf.base;
     requires java.compiler;
     requires com.fasterxml.jackson.annotation;
@@ -19,10 +19,6 @@ open module it.auties.cobalt {
     requires com.fasterxml.jackson.module.paramnames;
     requires com.fasterxml.jackson.datatype.jdk8;
     requires com.fasterxml.jackson.datatype.jsr310;
-    requires dd.plist;
-
-    // HTTP Client
-    requires java.net.http;
 
     // Generate message previews
     requires it.auties.linkpreview;
@@ -32,6 +28,7 @@ open module it.auties.cobalt {
 
     // Mobile api
     requires libphonenumber;
+    requires java.net.http;
 
     exports it.auties.whatsapp.api;
     exports it.auties.whatsapp.controller;
@@ -51,17 +48,14 @@ open module it.auties.cobalt {
     exports it.auties.whatsapp.model.payment;
     exports it.auties.whatsapp.model.message.button;
     exports it.auties.whatsapp.listener;
-    exports it.auties.whatsapp.util;
     exports it.auties.whatsapp.model.privacy;
     exports it.auties.whatsapp.model.poll;
     exports it.auties.whatsapp.model.mobile;
     exports it.auties.whatsapp.model.button.interactive;
     exports it.auties.whatsapp.model.button.base;
-    exports it.auties.whatsapp.model.button.misc;
     exports it.auties.whatsapp.model.button.template.hydrated;
     exports it.auties.whatsapp.model.button.template.hsm;
     exports it.auties.whatsapp.model.button.template;
-    exports it.auties.whatsapp.exception;
     exports it.auties.whatsapp.model.companion;
     exports it.auties.whatsapp.model.signal.session;
     exports it.auties.whatsapp.model.signal.auth;
@@ -73,4 +67,5 @@ open module it.auties.cobalt {
     exports it.auties.whatsapp.model.button.template.highlyStructured;
     exports it.auties.whatsapp.model.jid;
     exports it.auties.whatsapp.model.newsletter;
+    exports it.auties.whatsapp.exception;
 }

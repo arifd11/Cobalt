@@ -1,19 +1,17 @@
 package it.auties.whatsapp;
 
-import it.auties.whatsapp.api.DisconnectReason;
-import it.auties.whatsapp.api.Emoji;
-import it.auties.whatsapp.api.Whatsapp;
+import it.auties.whatsapp.api.*;
+import it.auties.whatsapp.controller.ControllerSerializer;
 import it.auties.whatsapp.listener.Listener;
 import it.auties.whatsapp.model.button.base.Button;
+import it.auties.whatsapp.model.button.base.ButtonRow;
+import it.auties.whatsapp.model.button.base.ButtonSection;
 import it.auties.whatsapp.model.button.base.ButtonText;
 import it.auties.whatsapp.model.button.interactive.InteractiveButton;
 import it.auties.whatsapp.model.button.interactive.InteractiveHeaderSimpleBuilder;
 import it.auties.whatsapp.model.button.interactive.InteractiveNativeFlowBuilder;
-import it.auties.whatsapp.model.button.misc.ButtonRow;
-import it.auties.whatsapp.model.button.misc.ButtonSection;
 import it.auties.whatsapp.model.button.template.hydrated.*;
 import it.auties.whatsapp.model.chat.*;
-import it.auties.whatsapp.model.companion.CompanionDevice;
 import it.auties.whatsapp.model.contact.Contact;
 import it.auties.whatsapp.model.contact.ContactCard;
 import it.auties.whatsapp.model.contact.ContactStatus;
@@ -25,17 +23,24 @@ import it.auties.whatsapp.model.message.button.*;
 import it.auties.whatsapp.model.message.model.*;
 import it.auties.whatsapp.model.message.standard.*;
 import it.auties.whatsapp.model.mobile.SixPartsKeys;
+import it.auties.whatsapp.model.newsletter.Newsletter;
+import it.auties.whatsapp.model.newsletter.NewsletterName;
+import it.auties.whatsapp.model.newsletter.NewsletterViewerRole;
 import it.auties.whatsapp.model.node.Node;
 import it.auties.whatsapp.model.poll.PollOption;
 import it.auties.whatsapp.model.privacy.PrivacySettingType;
 import it.auties.whatsapp.model.sync.HistorySyncMessage;
 import it.auties.whatsapp.util.Bytes;
+import it.auties.whatsapp.util.MediaUtils;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.MethodOrderer.OrderAnnotation;
 
 import java.io.IOException;
 import java.time.ZonedDateTime;
-import java.util.*;
+import java.util.Collection;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -61,7 +66,7 @@ public class TestLibrary implements Listener  {
 
     @BeforeAll
     public void init() throws IOException, InterruptedException  {
-        loadConfig();
+        contact = Jid.of(393668765865L);
         createApi();
         createLatch();
         latch.await();
@@ -69,34 +74,21 @@ public class TestLibrary implements Listener  {
 
     private void createApi()  {
         log("Initializing api to start testing...");
-        api = Whatsapp.mobileBuilder()
-                .newConnection(Objects.requireNonNull(account, "Missing account"))
-                .device(CompanionDevice.ios(true)) // Make sure to select the correct account type(business or personal) or you'll get error 401
-                .registered()
-                .orElseThrow()
+        api = Whatsapp.webBuilder()
+                .serializer(ControllerSerializer.discarding())
+                .newConnection()
+                .errorHandler((whatsapp, location, throwable) -> {
+                    Assertions.fail(throwable);
+                    return ErrorHandler.Result.DISCONNECT;
+                })
+                .unregistered(QrHandler.toTerminal())
                 .addListener(this);
         future = api.connect()
                 .exceptionally(Assertions::fail);
     }
 
-    private void loadConfig() throws IOException  {
-        if (GithubActions.isActionsEnvironment())  {
-            log("Loading environment variables...");
-            contact = Jid.of(System.getenv(GithubActions.CONTACT_NAME));
-            account = SixPartsKeys.of(System.getenv(GithubActions.ACCOUNT));
-            log("Loaded environment variables...");
-            return;
-        }
-
-        log("Loading configuration file...");
-        var props = ConfigUtils.loadConfiguration();
-        contact = Jid.of(Objects.requireNonNull(props.getProperty("contact"), "Missing contact property in config"));
-        account = SixPartsKeys.of(Objects.requireNonNull(props.getProperty("account", "Missing account property in config")));
-        log("Loaded configuration file");
-    }
-
     private void createLatch()  {
-        latch = new CountDownLatch(3);
+        latch = new CountDownLatch(4);
     }
 
     @Test
@@ -108,8 +100,8 @@ public class TestLibrary implements Listener  {
         Assertions.assertNotNull(contactResponse, "Missing response");
         var dummyResponse = response.get(dummy);
         Assertions.assertNotNull(dummy, "Missing response");
-        Assertions.assertTrue(contactResponse.hasWhatsapp(), "Erroneous response");
-        Assertions.assertFalse(dummyResponse.hasWhatsapp(), "Erroneous response");
+        Assertions.assertTrue(contactResponse, "Erroneous response");
+        Assertions.assertFalse(dummyResponse, "Erroneous response");
     }
 
     @Test
@@ -126,7 +118,6 @@ public class TestLibrary implements Listener  {
     private boolean getOnlineStatus()  {
         return api.store()
                 .jid()
-                .map(Jid::toSimpleJid)
                 .flatMap(api.store()::findContactByJid)
                 .map(entry -> entry.lastKnownPresence() == ContactStatus.AVAILABLE)
                 .orElse(false);
@@ -137,10 +128,7 @@ public class TestLibrary implements Listener  {
     }
 
     private Object[] redactParameters(Object... params)  {
-        if (!GithubActions.isActionsEnvironment())  {
-            return params;
-        }
-        return Arrays.stream(params).map(entry -> "***").toArray(String[]::new);
+        return params;
     }
 
     @Test
@@ -231,7 +219,65 @@ public class TestLibrary implements Listener  {
 
     @Test
     @Order(11)
-    @Disabled
+    public void testNewsletters() {
+        log("Creating newsletter...");
+        var newsletter = api.createNewsletter("Newsletter", "A brand new newsletter", null)
+                .join()
+                .orElseThrow(() -> new NoSuchElementException("Cannot create newsletter"));
+        log("Created newsletter: %s", newsletter);
+
+        // TODO: Change newsletter title
+
+        log("Changing newsletter name...");
+        api.changeNewsletterDescription(newsletter, "A new description")
+                .join();
+        log("Changed newsletter name");
+
+        for(var role : NewsletterViewerRole.values()) {
+            if(role != NewsletterViewerRole.UNKNOWN) {
+                log("Querying newsletter as %s...", role);
+                var result = api.queryNewsletter(newsletter.jid(), role)
+                        .join();
+                log("Queried newsletter: %s", result);
+            }
+        }
+
+        log("Querying 100 messages...", newsletter);
+        api.queryNewsletterMessages(newsletter, 100)
+                .join();
+        log("Queried %s messages", newsletter.messages().size());
+
+        log("Querying subscribers...", newsletter);
+        var subscribers = api.queryNewsletterSubscribers(newsletter).join();
+        log("Queried subscribers: %s", subscribers);
+
+        log("Querying recommended newsletters...", newsletter);
+        var recommendedNewsletters = api.queryRecommendedNewsletters("IT")
+                .join()
+                .orElseThrow(() -> new NoSuchElementException("Missing recommended newsletters"))
+                .newsletters();
+        log("Queried recommended newsletters: %s", recommendedNewsletters);
+
+        if(!recommendedNewsletters.isEmpty()) {
+            var recommendedNewsletter = recommendedNewsletters.getFirst();
+            var nameOrJid = recommendedNewsletter.metadata()
+                    .name()
+                    .map(NewsletterName::text)
+                    .orElseGet(recommendedNewsletter.jid()::toString);
+            log("Joining newsletter: %s", nameOrJid);
+            api.joinNewsletter(recommendedNewsletter)
+                    .join();
+            System.out.println("Joined newsletter");
+
+            log("Leaving newsletter: %s", nameOrJid);
+            api.leaveNewsletter(recommendedNewsletter)
+                    .join();
+            System.out.println("Left newsletter");
+        }
+    }
+
+    @Test
+    @Order(11)
     public void testGroupCreation()  {
         log("Creating group...");
         var response = api.createGroup(randomId(), contact).join();
@@ -239,42 +285,9 @@ public class TestLibrary implements Listener  {
             log("Cannot create group");
             return;
         }
-
         group = response.get().jid();
         log("Created group: %s", response);
     }
-
-    @Test
-    @Order(11)
-    @Disabled
-    public void testCommunity()  {
-        log("Creating community...");
-        var communityCreationResponse = api.createCommunity(randomId(), "A nice body")
-                .join()
-                .orElse(null);
-        Assertions.assertNotNull(communityCreationResponse, "Cannot create community");
-        log("Created community: %s", communityCreationResponse);
-        log("Querying community metadata...");
-        var communityMetadataResponse = api.queryGroupMetadata(communityCreationResponse.jid()).join();
-        Assertions.assertTrue(communityMetadataResponse.isCommunity(), "Expected a community");
-        log("Queried community metadata: %s", communityMetadataResponse);
-        log("Creating child group...");
-        var communityChildCreationResponse = api.createGroup(randomId(), ChatEphemeralTimer.THREE_MONTHS, communityCreationResponse.jid()).join();
-        log("Created child group: %s", communityChildCreationResponse);
-        log("Querying child group metadata...");
-        var communityChildMetadataResponse = api.queryGroupMetadata(communityChildCreationResponse.orElseThrow().jid()).join();
-        Assertions.assertFalse(communityChildMetadataResponse.isCommunity(), "Expected a group");
-        log("Queried child group metadata: %s", communityChildMetadataResponse);
-        log("Unlinking child group...");
-        var unlinkChildCommunityResponse = api.unlinkGroupFromCommunity(communityMetadataResponse.jid(), communityChildMetadataResponse.jid()).join();
-        Assertions.assertTrue(unlinkChildCommunityResponse, "Failed unlink");
-        log("Unlinked child group");
-        log("Linking child group...");
-        var linkChildCommunityResponse = api.linkGroupsToCommunity(communityMetadataResponse.jid(), communityChildMetadataResponse.jid()).join();
-        Assertions.assertTrue(linkChildCommunityResponse.get(communityChildMetadataResponse.jid()), "Failed link");
-        log("Linked child group");
-    }
-
 
     @Test
     @Order(12)
@@ -282,14 +295,28 @@ public class TestLibrary implements Listener  {
         if (group == null)  {
             return;
         }
-        for (var presence : ContactStatus.values())  {          log("Changing individual presence to %s...", presence.name());
+        for (var presence : ContactStatus.values())  {
+            log("Changing individual presence to %s...", presence.name());
             var response = api.changePresence(group, presence).join();
             log("Changed individual presence: %s", response);
         }
+        api.changePresence(group, ContactStatus.AVAILABLE).join();
     }
 
     @Test
     @Order(13)
+    public void testChangeGroupPicture()  {
+        if (group == null)  {
+            return;
+        }
+
+        log("Changing group pic...");
+        var picResponse = api.changeGroupPicture(group, MediaUtils.readBytes("https://upload.wikimedia.org/wikipedia/commons/d/d2/Solid_white.png?20060513000852")).join();
+        log("Changed group pic: %s", picResponse);
+    }
+
+    @Test
+    @Order(14)
     public void testChangeGroupName()  {
         if (group == null)  {
             return;
@@ -300,7 +327,7 @@ public class TestLibrary implements Listener  {
     }
 
     @RepeatedTest(2)
-    @Order(14)
+    @Order(15)
     public void testChangeGroupDescription()  {
         if (group == null)  {
             return;
@@ -311,64 +338,66 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(15)
+    @Order(16)
     public void testRemoveGroupParticipant()  {
         if (group == null)  {
             return;
         }
         log("Removing %s...", contact);
-        var changeGroupResponse = api.removeGroupParticipant(group, contact).join();
+        var changeGroupResponse = api.removeGroupParticipants(group, contact).join();
         log("Removed: %s", changeGroupResponse);
     }
 
     @Test
-    @Order(16)
+    @Order(17)
     public void testAddGroupParticipant()  {
         if (group == null)  {
             return;
         }
         log("Adding %s...", contact);
-        var changeGroupResponse = api.addGroupParticipant(group, contact).join();
+        var changeGroupResponse = api.addGroupParticipants(group, contact).join();
         log("Added: %s", changeGroupResponse);
     }
 
     @Test
-    @Order(17)
+    @Order(18)
     public void testPromotion()  {
         if (group == null)  {
             return;
         }
         log("Promoting %s...", contact);
-        var changeGroupResponse = api.promoteGroupParticipant(group, contact).join();
+        var changeGroupResponse = api.promoteGroupParticipants(group, contact).join();
         log("Promoted: %s", changeGroupResponse);
     }
 
     @Test
-    @Order(18)
+    @Order(19)
     public void testDemotion()  {
         if (group == null)  {
             return;
         }
         log("Demoting %s...", contact);
-        var changeGroupResponse = api.demoteGroupParticipant(group, contact).join();
+        var changeGroupResponse = api.demoteGroupParticipants(group, contact).join();
         log("Demoted: %s", changeGroupResponse);
     }
 
     @Test
-    @Order(19)
+    @Order(20)
     public void testChangeAllGroupSettings()  {
         if (group == null)  {
             return;
         }
-        for(var setting : GroupSetting.values())  {          for (var policy : ChatSettingPolicy.values())  {              log("Changing setting %s to %s...", setting.name(), policy.name());
-            api.changeGroupSetting(group, setting, policy).join();
-            log("Changed setting %s to %s", setting.name(), policy.name());
-        }
+        for(var setting : GroupSetting.values())  {
+            for (var policy : ChatSettingPolicy.values())  {
+                log("Changing setting %s to %s...", setting.name(), policy.name());
+                api.changeGroupSetting(group, setting, policy).join();
+                log("Changed setting %s to %s", setting.name(), policy.name());
+            }
         }
     }
 
     @Test
-    @Order(20)
+    @Order(21)
     public void testGroupQuery()  {
         if (group == null)  {
             return;
@@ -379,7 +408,88 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(21)
+    @Order(22)
+    public void testCommunity()  {
+        log("Creating community...");
+        var communityCreationResponse = api.createCommunity(randomId(), "A nice body")
+                .join()
+                .orElse(null);
+        Assertions.assertNotNull(communityCreationResponse, "Cannot create community");
+        log("Created community: %s", communityCreationResponse);
+
+        log("Querying community metadata...");
+        var communityMetadataResponse = api.queryCommunityMetadata(communityCreationResponse.jid()).join();
+        Assertions.assertTrue(communityMetadataResponse.isCommunity(), "Expected a community");
+        log("Queried community metadata: %s", communityMetadataResponse);
+
+        log("Querying community link...");
+        var link = api.queryGroupInviteLink(communityCreationResponse.jid()).join();
+        log("Queried community link: " + link);
+
+        log("Creating child group...");
+        var placeholderResponse = api.createCommunityGroup(randomId(), ChatEphemeralTimer.THREE_MONTHS, communityCreationResponse.jid())
+                .join()
+                .orElse(null);
+        Assertions.assertNotNull(placeholderResponse, "Cannot create child group");
+        log("Created child group: %s", placeholderResponse);
+
+        log("Creating another child group...");
+        var communityChildCreationResponse = api.createCommunityGroup(randomId(), ChatEphemeralTimer.THREE_MONTHS, communityCreationResponse.jid())
+                .join()
+                .orElse(null);
+        Assertions.assertNotNull(communityChildCreationResponse, "Cannot create another child group");
+        api.addCommunityParticipants(communityMetadataResponse.jid(), contact).join();
+        log("Created another child group: %s", communityChildCreationResponse);
+
+        log("Querying child group metadata...");
+        var communityChildMetadataResponse = api.queryGroupMetadata(communityChildCreationResponse.jid()).join();
+        Assertions.assertFalse(communityChildMetadataResponse.isCommunity(), "Expected a group");
+        log("Queried child group metadata: %s", communityChildMetadataResponse);
+
+        log("Changing community pic...");
+        var picResponse = api.changeCommunityPicture(communityCreationResponse.jid(), MediaUtils.readBytes("https://upload.wikimedia.org/wikipedia/commons/d/d2/Solid_white.png?20060513000852")).join();
+        log("Changed community pic: %s", picResponse);
+
+        log("Changing community subject...");
+        var subjectResponse = api.changeCommunitySubject(communityCreationResponse.jid(), "Renamed").join();
+        log("Changed community subject: %s", subjectResponse);
+
+        for(var i = 0; i < 2; i++) {
+            log("Changing community description...");
+            var descriptionResponse = api.changeCommunityDescription(communityCreationResponse.jid(), randomId()).join();
+            log("Changed community description: %s", descriptionResponse);
+        }
+
+        for (var setting : CommunitySetting.values()) {
+            log("Changing community setting: %s", setting);
+            log("Changing community setting %s to admin", setting);
+            api.changeCommunitySetting(communityCreationResponse.jid(), setting, ChatSettingPolicy.ADMINS).join();
+            log("Changing community setting %s to anyone", setting);
+            api.changeCommunitySetting(communityCreationResponse.jid(), setting, ChatSettingPolicy.ANYONE).join();
+            log("Changed community setting: %s", setting);
+        }
+
+        log("Unlinking child group...");
+        var unlinkChildCommunityResponse = api.removeCommunityGroup(communityMetadataResponse.jid(), communityChildMetadataResponse.jid()).join();
+        Assertions.assertTrue(unlinkChildCommunityResponse, "Failed unlink");
+        log("Unlinked child group");
+
+        log("Relinking child group...");
+        var linkChildCommunityResponse = api.addCommunityGroups(communityMetadataResponse.jid(), communityChildMetadataResponse.jid()).join();
+        Assertions.assertTrue(linkChildCommunityResponse.get(communityChildMetadataResponse.jid()), "Failed link");
+        log("Relinked child group");
+
+        log("Removing contact from community...");
+        api.removeCommunityParticipants(communityCreationResponse.jid(), contact).join();
+        log("Removed contact from community");
+
+        log("Deleting community...");
+        var deleteResponse = api.deactivateCommunity(communityCreationResponse.jid()).join();
+        log("Deleted community: " + deleteResponse);
+    }
+
+    @Test
+    @Order(23)
     public void testMute()  {
         if (group == null)  {
             return;
@@ -390,7 +500,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(22)
+    @Order(24)
     public void testUnmute()  {
         if (group == null)  {
             return;
@@ -401,7 +511,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(23)
+    @Order(25)
     public void testArchive()  {
         if (group == null)  {
             return;
@@ -412,7 +522,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(24)
+    @Order(26)
     public void testUnarchive()  {
         if (group == null)  {
             return;
@@ -423,7 +533,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(25)
+    @Order(27)
     public void testPin()  {
         if (group == null)  {
             return;
@@ -438,7 +548,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(26)
+    @Order(28)
     public void testUnpin()  {
         if (group == null)  {
             return;
@@ -453,11 +563,16 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(27)
+    @Order(29)
     public void testTextMessage()  {
         log("Sending simple text...");
         api.sendMessage(contact, "Hello").join();
         log("Sent simple text");
+    }
+
+    @Test
+    @Order(30)
+    public void testTextMessageExtended() {
         log("Sending youtube video...");
         api.sendMessage(contact, "Hello: https://www.youtube.com/watch?v=4boXExbbGCk").join();
         log("Sent youtube video");
@@ -468,7 +583,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(28)
+    @Order(31)
     public void deleteMessage()  {
         var example = (ChatMessageInfo) api.sendMessage(contact, "Hello").join();
         log("Deleting for you...");
@@ -480,8 +595,8 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(30)
-    public void testImageMessage()  {
+    @Order(32)
+    public void testImageMessage()  { // Run image first to check for media timeout
         log("Sending image...");
         var image = new ImageMessageSimpleBuilder()
                 .media(MediaUtils.readBytes("https://2.bp.blogspot.com/-DqXILvtoZFA/Wmmy7gRahnI/AAAAAAAAB0g/59c8l63QlJcqA0591t8-kWF739DiOQLcACEwYBhgL/s1600/pol-venere-botticelli-01.jpg"))
@@ -492,7 +607,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(31)
+    @Order(33)
     public void testAudioMessage()  {
         log("Sending audio...");
         var audio = new AudioMessageSimpleBuilder()
@@ -504,19 +619,20 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(32)
+    @Order(34)
     public void testVideoMessage()  {
         log("Sending video...");
         var video = new VideoMessageSimpleBuilder()
                 .media(MediaUtils.readBytes(VIDEO_URL))
                 .caption("Video")
                 .build();
+        api.sendMessage(contact, "Hello").join();
         api.sendMessage(contact, video).join();
         log("Sent video");
     }
 
     @Test
-    @Order(33)
+    @Order(35)
     public void testGifMessage()  {
         log("Sending gif...");
         var video = new GifMessageSimpleBuilder()
@@ -528,7 +644,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(34)
+    @Order(36)
     public void testPdfMessage()  {
         log("Sending pdf...");
         var document = new DocumentMessageSimpleBuilder()
@@ -542,7 +658,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(34)
+    @Order(37)
     public void testDocumentMessage()  {
         log("Sending document...");
         var document = new DocumentMessageSimpleBuilder()
@@ -555,7 +671,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(34)
+    @Order(38)
     public void testPowerpointMessage()  {
         log("Sending powerpoint...");
         var document = new DocumentMessageSimpleBuilder()
@@ -568,7 +684,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(35)
+    @Order(39)
     public void testContactMessage()  {
         log("Sending contact message...");
         var vcard = ContactCard.of("""
@@ -587,7 +703,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(36)
+    @Order(40)
     public void testLocationMessage()  {
         log("Sending location message...");
         var location = new LocationMessageBuilder()
@@ -600,7 +716,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(37)
+    @Order(41)
     public void testGroupInviteMessage()  {
         if (group == null)  {
             return;
@@ -620,7 +736,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(38)
+    @Order(42)
     public void testEnableEphemeralMessages()  {
         if (group == null)  {
             return;
@@ -631,7 +747,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(39)
+    @Order(43)
     public void testDisableEphemeralMessages()  {
         if (group == null)  {
             return;
@@ -642,7 +758,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(40)
+    @Order(44)
     public void testLeave()  {
         if (group == null)  {
             return;
@@ -653,7 +769,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(43)
+    @Order(45)
     public void testPollMessage()  {
         var pollOptionFirst = new PollOption("First");
         var pollOptionSecond = new PollOption("Second");
@@ -673,26 +789,22 @@ public class TestLibrary implements Listener  {
                 .votes(List.of(pollOptionFirst, pollOptionSecond))
                 .build();
         api.sendMessage(contact, secondUpdate).join();
-        var finalUpdate = new PollUpdateMessageSimpleBuilder()
-                .poll(pollInfo)
-                .votes(List.of())
-                .build();
-        api.sendMessage(contact, finalUpdate).join();
         log("Sent poll message");
     }
 
     @Test
-    @Order(44)
-    @Disabled
+    @Order(46)
     public void testReaction()  {
-        for (var emoji : Emoji.values())  {
+        var values = Emoji.values();
+        for (var i = 0; i < 10; i++) {
+            var emoji = values[i];
             api.sendMessage(contact, emoji.name())
                     .thenAcceptAsync(message -> api.sendReaction(message, emoji)).join();
         }
     }
 
     @Test
-    @Order(45)
+    @Order(47)
     public void testMediaDownload()  {
         log("Trying to decode some medias...");
         var success = new AtomicInteger();
@@ -714,7 +826,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(46)
+    @Order(48)
     public void testButtonsMessage()  {
         log("Sending buttons...");
         var imageButtons = new ButtonsMessageSimpleBuilder()
@@ -734,7 +846,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(47)
+    @Order(49)
     public void testListMessage()  {
         var buttons = List.of(ButtonRow.of("First option", "A nice description"), ButtonRow.of("Second option", "A nice description"), ButtonRow.of("Third option", "A nice description"));
         var section = new ButtonSection("First section", buttons);
@@ -756,7 +868,7 @@ public class TestLibrary implements Listener  {
                 .jid()
                 .orElseThrow();
         var keyInfo = new ChatMessageKeyBuilder()
-                .id(ChatMessageKey.randomId())
+                .id(ChatMessageKey.randomIdV2(jid, api.store().clientType()))
                 .chatJid(contact)
                 .senderJid(jid)
                 .fromMe(true)
@@ -772,12 +884,12 @@ public class TestLibrary implements Listener  {
     }
 
     @Test
-    @Order(48)
+    @Order(50)
     public void testTemplateMessage()  {
         log("Sending template message...");
         var quickReplyButton = HydratedTemplateButton.of(HydratedQuickReplyButton.of("Click me"));
         var urlButton = HydratedTemplateButton.of(new HydratedURLButton("Search it", "https://google.com"));
-        var callButton = HydratedTemplateButton.of(new HydratedCallButton("Call me", contact.toPhoneNumber()));
+        var callButton = HydratedTemplateButton.of(new HydratedCallButton("Call me", contact.toPhoneNumber().orElseThrow()));
         var fourRowTemplate = new HydratedFourRowTemplateSimpleBuilder()
                 .body("A nice body")
                 .footer("A nice footer")
@@ -792,7 +904,7 @@ public class TestLibrary implements Listener  {
 
     // Just have a test to see if it gets sent, it's not actually a functioning button because it's designed for more complex use cases
     @Test
-    @Order(49)
+    @Order(51)
     public void testInteractiveMessage()  {
         log("Sending interactive messages..");
         var nativeFlowMessage = new InteractiveNativeFlowBuilder()
@@ -839,7 +951,9 @@ public class TestLibrary implements Listener  {
     @Override
     public void onDisconnected(DisconnectReason reason)  {
         System.out.printf("Disconnected: %s%n", reason);
-        Assertions.assertNotSame(reason, DisconnectReason.LOGGED_OUT);
+        if(reason != DisconnectReason.RECONNECTING) {
+            System.exit(1);
+        }
     }
 
     @Override
@@ -855,6 +969,12 @@ public class TestLibrary implements Listener  {
     }
 
     @Override
+    public void onNewsletters(Collection<Newsletter> newsletters) {
+        latch.countDown();
+        log("Got newsletters: %s", latch.getCount());
+    }
+
+    @Override
     public void onChatMessagesSync(Chat chat, boolean last) {
         if (!last)  {
             return;
@@ -864,7 +984,7 @@ public class TestLibrary implements Listener  {
     }
 
     @Override
-    public void onNewMessage(Whatsapp whatsapp, MessageInfo info) {
+    public void onNewMessage(Whatsapp whatsapp, MessageInfo<?> info) {
         System.out.println(info.toJson());
     }
 
