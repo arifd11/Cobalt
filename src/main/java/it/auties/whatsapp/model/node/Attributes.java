@@ -1,13 +1,14 @@
 package it.auties.whatsapp.model.node;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonValue;
+import com.alibaba.fastjson2.JSON;
 import it.auties.whatsapp.model.jid.Jid;
 
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static java.util.Map.ofEntries;
 import static java.util.Objects.requireNonNull;
@@ -17,7 +18,7 @@ import static java.util.Objects.requireNonNull;
  *
  * @param toMap the non-null wrapped map
  */
-public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
+public record Attributes(LinkedHashMap<String, Object> toMap) {
     /**
      * Constructs a new map using the non-null provided entries
      *
@@ -36,7 +37,6 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
      * @return a new instance of Attributes
      */
     @SafeVarargs
-    @JsonCreator
     public static Attributes ofNullable(Entry<String, ?>... entries) {
         return entries == null ? of() : ofNullable(ofEntries(entries));
     }
@@ -422,5 +422,17 @@ public record Attributes(@JsonValue LinkedHashMap<String, Object> toMap) {
     @SuppressWarnings("unchecked")
     public Entry<String, Object>[] toEntries() {
         return toMap.entrySet().toArray(Entry[]::new);
+    }
+
+    public void forEach(BiConsumer<? super String, ? super Object> consumer) {
+       toMap.forEach(consumer);
+    }
+
+    public Stream<Map.Entry<String, Object>> stream() {
+        return toMap.entrySet().stream();
+    }
+
+    public String toJson() {
+        return JSON.toJSONString(toMap);
     }
 }

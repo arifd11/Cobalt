@@ -1,7 +1,5 @@
 package it.auties.whatsapp.model.node;
 
-import it.auties.whatsapp.util.Json;
-
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -15,6 +13,8 @@ import java.util.stream.Stream;
  * @param content     a nullable object: a List of {@link Node}, a {@link String} or a {@link Number}
  */
 public record Node(String description, Attributes attributes, Object content) {
+    private static final Node EMPTY = new Node("xmlstreamend", Attributes.of(), null);
+
     /**
      * Constructs a Node that only provides a non-null tag
      *
@@ -169,6 +169,10 @@ public record Node(String description, Attributes attributes, Object content) {
         } catch (ClassCastException exception) {
             throw new IllegalArgumentException("Unexpected payload type: expected nodes collection", exception);
         }
+    }
+
+    public static Node empty() {
+        return EMPTY;
     }
 
     /**
@@ -374,14 +378,5 @@ public record Node(String description, Attributes attributes, Object content) {
 
         return hasDescription("result") || hasDescription("query") || hasDescription("body")
                 ? new String(bytes) : Arrays.toString(bytes);
-    }
-
-    /**
-     * Converts this node into a JSON String
-     *
-     * @return a non null String
-     */
-    public String toJson() {
-        return Json.writeValueAsString(this, true);
     }
 }

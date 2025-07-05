@@ -1,9 +1,6 @@
 package it.auties.whatsapp.controller;
 
 import it.auties.whatsapp.api.ClientType;
-import it.auties.whatsapp.controller.builtin.DiscardingControllerSerializer;
-import it.auties.whatsapp.controller.builtin.JsonControllerSerializer;
-import it.auties.whatsapp.controller.builtin.ProtobufControllerSerializer;
 import it.auties.whatsapp.model.mobile.PhoneNumber;
 
 import java.nio.file.Path;
@@ -50,27 +47,6 @@ public interface ControllerSerializer {
     }
 
     /**
-     * Returns a json serializer
-     * This implementation uses .json files with no compression
-     *
-     * @return a serializer
-     */
-    static ControllerSerializer toJson() {
-        return new JsonControllerSerializer();
-    }
-
-    /**
-     * Returns the default serializer
-     * This implementation uses .json files with no compression
-     *
-     * @param baseDirectory the directory where all the sessions should be saved
-     * @return a serializer
-     */
-    static ControllerSerializer toJson(Path baseDirectory) {
-        return new JsonControllerSerializer(baseDirectory);
-    }
-
-    /**
      * Returns all the known IDs
      *
      * @param type the non-null type of client
@@ -95,11 +71,11 @@ public interface ControllerSerializer {
      * @param clientType  the non-null client type
      * @return a non-null store-keys pair
      */
-    default StoreKeysPair newStoreKeysPair(UUID uuid, Long phoneNumber, Collection<String> alias, ClientType clientType) {
-        var store = Store.newStore(uuid, phoneNumber, alias, clientType);
+    default StoreKeysPair newStoreKeysPair(UUID uuid, PhoneNumber phoneNumber, Collection<String> alias, ClientType clientType) {
+        var store = Store.of(uuid, phoneNumber, alias, clientType);
         store.setSerializer(this);
         linkMetadata(store);
-        var keys = Keys.newKeys(uuid, phoneNumber, alias, clientType);
+        var keys = Keys.of(uuid, phoneNumber, alias, clientType);
         keys.setSerializer(this);
         serializeKeys(keys, true);
         return new StoreKeysPair(store, keys);
@@ -114,7 +90,7 @@ public interface ControllerSerializer {
      * @param clientType  the non-null client type
      * @return an optional store-keys pair
      */
-    default Optional<StoreKeysPair> deserializeStoreKeysPair(UUID uuid, Long phoneNumber, String alias, ClientType clientType) {
+    default Optional<StoreKeysPair> deserializeStoreKeysPair(UUID uuid, PhoneNumber phoneNumber, String alias, ClientType clientType) {
         if (uuid != null) {
             var store = deserializeStore(clientType, uuid);
             if(store.isEmpty()) {
@@ -201,7 +177,7 @@ public interface ControllerSerializer {
      * @param phoneNumber the phone number of the keys
      * @return a non-null keys
      */
-    Optional<Keys> deserializeKeys(ClientType type, long phoneNumber);
+    Optional<Keys> deserializeKeys(ClientType type, PhoneNumber phoneNumber);
 
 
     /**
@@ -229,7 +205,7 @@ public interface ControllerSerializer {
      * @param phoneNumber the phone number of the store
      * @return a non-null store
      */
-    Optional<Store> deserializeStore(ClientType type, long phoneNumber);
+    Optional<Store> deserializeStore(ClientType type, PhoneNumber phoneNumber);
 
     /**
      * Serializes the store

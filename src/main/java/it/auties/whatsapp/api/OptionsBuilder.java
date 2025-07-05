@@ -2,7 +2,6 @@ package it.auties.whatsapp.api;
 
 import it.auties.whatsapp.controller.Keys;
 import it.auties.whatsapp.controller.Store;
-import it.auties.whatsapp.listener.RegisterListener;
 import it.auties.whatsapp.model.signal.auth.UserAgent.ReleaseChannel;
 
 import java.net.URI;
@@ -28,18 +27,6 @@ public sealed class OptionsBuilder<T extends OptionsBuilder<T>> permits MobileOp
     @SuppressWarnings("unchecked")
     public T name(String name) {
         store.setName(name);
-        return (T) this;
-    }
-
-    /**
-     * Sets whether listeners marked with the {@link RegisterListener} annotation should be automatically detected and registered
-     * By default, this option is enabled
-     *
-     * @return the same instance for chaining
-     */
-    @SuppressWarnings("unchecked")
-    public T autodetectListeners(boolean autodetectListeners) {
-        store.setAutodetectListeners(autodetectListeners);
         return (T) this;
     }
 

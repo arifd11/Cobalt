@@ -1,24 +1,44 @@
 package it.auties.whatsapp.model.newsletter;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
+import com.alibaba.fastjson2.JSONObject;
 import it.auties.protobuf.annotation.ProtobufMessage;
 import it.auties.protobuf.annotation.ProtobufProperty;
 import it.auties.protobuf.model.ProtobufType;
 
 import java.util.Objects;
+import java.util.Optional;
 
 @ProtobufMessage
 public final class NewsletterState {
-    @ProtobufProperty(index = 1, type = ProtobufType.STRING)
-    private String type;
+    private static final NewsletterState UNKNOWN = new NewsletterState(null);
 
-    @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
-    public NewsletterState(String type) {
+    @ProtobufProperty(index = 1, type = ProtobufType.STRING)
+    String type;
+
+    NewsletterState(String type) {
         this.type = type;
     }
 
-    public String type() {
-        return type;
+    public static NewsletterState unknown() {
+        return UNKNOWN;
+    }
+
+    public static Optional<NewsletterState> ofJson(JSONObject jsonObject) {
+        if(jsonObject == null) {
+            return Optional.empty();
+        }
+
+        var type = jsonObject.getString("type");
+        if(type != null) {
+            return Optional.empty();
+        }
+
+        var result = new NewsletterState(type);
+        return Optional.of(result);
+    }
+
+    public Optional<String> type() {
+        return Optional.ofNullable(type);
     }
 
     public NewsletterState setType(String type) {
@@ -27,19 +47,20 @@ public final class NewsletterState {
     }
 
     @Override
-    public String toString() {
-        return "NewsletterState{" +
-                "type='" + type + '\'' +
-                '}';
-    }
-
-    @Override
     public boolean equals(Object o) {
-        return o instanceof NewsletterState that && Objects.equals(type, that.type);
+        return o instanceof NewsletterState that
+                && Objects.equals(type, that.type);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(type);
+    }
+
+    @Override
+    public String toString() {
+        return "NewsletterState{" +
+                "type='" + type + '\'' +
+                '}';
     }
 }

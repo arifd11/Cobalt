@@ -6,7 +6,7 @@ import it.auties.whatsapp.model.companion.CompanionDevice;
 import it.auties.whatsapp.model.mobile.PhoneNumber;
 import it.auties.whatsapp.model.mobile.VerificationCodeMethod;
 import it.auties.whatsapp.model.response.RegistrationResponse;
-import it.auties.whatsapp.registration.WhatsappRegistration;
+import it.auties.whatsapp.util.MobileRegistration;
 
 import java.net.URI;
 import java.util.Objects;
@@ -87,10 +87,11 @@ public sealed class MobileRegistrationBuilder {
             Objects.requireNonNull(verificationCodeSupplier, "Expected a valid verification code supplier");
             Objects.requireNonNull(verificationCodeMethod, "Expected a valid verification method");
             if (!keys.registered()) {
-                var number = PhoneNumber.of(phoneNumber);
+                var number = PhoneNumber.of(phoneNumber)
+                        .orElseThrow(() -> new IllegalArgumentException(phoneNumber + " is not a valid phone number"));
                 keys.setPhoneNumber(number);
                 store.setPhoneNumber(number);
-                var registration = new WhatsappRegistration(
+                var registration = new MobileRegistration(
                         store,
                         keys,
                         verificationCodeSupplier,
@@ -126,11 +127,12 @@ public sealed class MobileRegistrationBuilder {
                 return CompletableFuture.completedFuture(unregisteredResult);
             }
 
-            var number = PhoneNumber.of(phoneNumber);
+            var number = PhoneNumber.of(phoneNumber)
+                    .orElseThrow(() -> new IllegalArgumentException(phoneNumber + " is not a valid phone number"));
             keys.setPhoneNumber(number);
             store.setPhoneNumber(number);
             if (!keys.registered()) {
-                var registration = new WhatsappRegistration(
+                var registration = new MobileRegistration(
                         store,
                         keys,
                         verificationCodeSupplier,
@@ -184,7 +186,8 @@ public sealed class MobileRegistrationBuilder {
          * @return the same instance for chaining
          */
         public CompletableFuture<RegisteredResult> verify(long phoneNumber) {
-            var number = PhoneNumber.of(phoneNumber);
+            var number = PhoneNumber.of(phoneNumber)
+                    .orElseThrow(() -> new IllegalArgumentException(phoneNumber + " is not a valid phone number"));
             keys.setPhoneNumber(number);
             store.setPhoneNumber(number);
             return verify();
@@ -202,7 +205,7 @@ public sealed class MobileRegistrationBuilder {
 
             Objects.requireNonNull(store.phoneNumber(), "Missing phone number: please specify it");
             Objects.requireNonNull(verificationCodeSupplier, "Expected a valid verification code supplier");
-            var registration = new WhatsappRegistration(
+            var registration = new MobileRegistration(
                     store,
                     keys,
                     verificationCodeSupplier,

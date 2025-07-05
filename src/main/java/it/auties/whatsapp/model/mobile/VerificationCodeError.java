@@ -1,7 +1,5 @@
 package it.auties.whatsapp.model.mobile;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-
 import java.util.Arrays;
 
 public enum VerificationCodeError {
@@ -42,7 +40,6 @@ public enum VerificationCodeError {
         this.data = data;
     }
 
-    @JsonCreator
     public static VerificationCodeError of(String name) {
         return Arrays.stream(values())
                 .filter(entry -> entry.data.equalsIgnoreCase(name))

@@ -12,30 +12,16 @@ public final class Proxies {
 
     public static ProxySelector toProxySelector(URI uri) {
         if (uri == null) {
-            return null;
+            return ProxySelector.getDefault();
         }
 
         var scheme = Objects.requireNonNull(uri.getScheme(), "Invalid proxy, expected a scheme: %s".formatted(uri));
-        Validate.isTrue(scheme.equalsIgnoreCase("http") || scheme.equalsIgnoreCase("https"),
-                "Only HTTP and HTTPS proxies are supported in this context");
+        if (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https")) {
+            throw new IllegalArgumentException("Only HTTP and HTTPS proxies are supported in this context");
+        }
         var host = Objects.requireNonNull(uri.getHost(), "Invalid proxy, expected a host: %s".formatted(uri));
         var port = getDefaultPort(scheme, uri.getPort()).orElseThrow(() -> new NullPointerException("Invalid proxy, expected a port: %s".formatted(uri)));
         return ProxySelector.of(InetSocketAddress.createUnresolved(host, port));
-    }
-
-    public static Proxy toProxy(URI uri) {
-        if (uri == null) {
-            return Proxy.NO_PROXY;
-        }
-
-        var scheme = Objects.requireNonNull(uri.getScheme(), "Invalid proxy, expected a scheme: %s".formatted(uri));
-        var host = Objects.requireNonNull(uri.getHost(), "Invalid proxy, expected a host: %s".formatted(uri));
-        var port = getDefaultPort(scheme, uri.getPort()).orElseThrow(() -> new NullPointerException("Invalid proxy, expected a port: %s".formatted(uri)));
-        return switch (scheme.toLowerCase()) {
-            case "http", "https" -> new Proxy(Proxy.Type.HTTP, InetSocketAddress.createUnresolved(host, port));
-            case "socks5", "socks5h" -> new Proxy(Proxy.Type.SOCKS, InetSocketAddress.createUnresolved(host, port));
-            default -> throw new IllegalStateException("Unexpected scheme: " + scheme);
-        };
     }
 
     private static OptionalInt getDefaultPort(String scheme, int port) {
@@ -71,8 +57,10 @@ public final class Proxies {
         return new Authenticator() {
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
-                Validate.isTrue(Objects.equals(getRequestingHost(), proxy.getHost()) && Objects.equals(getRequestingPort(), proxy.getPort()),
-                        "Unexpected proxy request: %s:%s", getRequestingHost(), getRequestingPort());
+                if (!Objects.equals(getRequestingHost(), proxy.getHost()) || !Objects.equals(getRequestingPort(), proxy.getPort())) {
+                   return null;
+                }
+
                 var userInfo = parseUserInfo(proxy.getUserInfo());
                 if(userInfo == null) {
                     return null;
